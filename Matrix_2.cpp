@@ -1,5 +1,5 @@
 #include <chrono>
-#include <filesystem>  // ディレクトリ作成に使用
+#include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <random>
@@ -39,14 +39,11 @@ int main(int argc, char **argv) {
   auto start = chrono::high_resolution_clock::now();
 
   // 行列計算
-  for (int i = 0; i < 1; i++) {
-    for (int j = 0; j < N; j++) {
-      int v = 0;
-      for (int k = 0; k < N; k++) {
-        v += matA[i][k] * matB[k][j];
-      }
-      matC[i][j] = v;
-    }
+  for (int j = 0; j < N * N; j++) {
+    int row = j / N;  // 行番号
+    int col = j % N;  // 列番号
+
+    matC[0][row] += matA[0][col] * matB[col][row];
   }
 
   // 実行時間計測終了
