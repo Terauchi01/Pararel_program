@@ -28,14 +28,13 @@ void jacobiMethod(const vector<vector<double>>& A, const vector<double>& b,
       double sigma = 0.0;
 
       // i行目の他の列の計算
+#pragma omp simd
       for (int j = 0; j < n; j++) {
-        if (i == j) {
-          continue;
+        if (i != j) {
+          sigma += A[i][j] * x[j];
         }
-        sigma += A[i][j] * x[j];
       }
 
-      // 新しいx[i]の計算
       x_new[i] = (b[i] - sigma) / A_i;
 
       error += abs(x_new[i] - x[i]);

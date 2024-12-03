@@ -15,10 +15,9 @@ int main(int argc, char** argv) {
   int K = atoi(argv[1]);             // Kのサイズ
   int N = atoi(argv[2]);             // Nのサイズ
   string output_filename = argv[3];  // 出力ファイル名
-  output_filename = "./Matrix_OpenMP_log/" + output_filename;
 
   // 行列の初期化
-  MatrixXd A(K, N), B(N, K), C(N, N);
+  MatrixXd A(K, N), B(N, K), C(K, K);
 
   // ランダム数生成
   int seed = 0;
@@ -49,7 +48,11 @@ int main(int argc, char** argv) {
     return 1;
   }
 
+<<<<<<< Updated upstream
   outfile << C << " ";  // 計算結果の行列Cをファイルに書き込む
+=======
+  outfile << C << "\n";  // 計算結果の行列Cをファイルに書き込む
+>>>>>>> Stashed changes
 
   outfile.close();
 

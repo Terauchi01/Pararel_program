@@ -76,13 +76,11 @@ int main(int argc, char **argv) {
   int k = 0;
   int a = 0;
   for (int i = start_row; i < end_row; i++) {  // 行列Aの行をループ
-    asm("start_label:");
     j = (i / N);
     a = j / N;
     k = i % N;
     j = j % N;
     shared_matC[(N * a) + k] += matA[a][k] * matB[k][j];
-    asm("end_label:");
   }
 
   // int range = (N * N) / size;
