@@ -36,18 +36,17 @@ int main(int argc, char **argv) {
       matA[i][j] = 1;
     }
   }
-  for (int i = 0; i < N; i++) {
+  for (int i = 0; i < K; i++) {
     for (int j = 0; j < N; j++) {
       matB[i][j] = 1;  // ランダム値で初期化
     }
   }
-  int loop_max = N * N * N;
 
   // MPI初期化
   MPI_Init(&argc, &argv);
   MPI_Comm_size(MPI_COMM_WORLD, &size);
   MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-  MPI_Barrier(MPI_COMM_WORLD);  // 全プロセスを同期
+  // MPI_Barrier(MPI_COMM_WORLD);  // 全プロセスを同期
   int *shared_matC;
   MPI_Win win;
   MPI_Win_allocate_shared(rank == 0 ? N * N * sizeof(int) : 0, sizeof(int),
@@ -66,35 +65,22 @@ int main(int argc, char **argv) {
       shared_matC[i] = 0;
     }
   }
+  MPI_Win_fence(0, win);
   double start_time = MPI_Wtime();
-  int rows_per_process = N * N * N / size;  // 基本の行数
-  int extra_rows = N * N * N % size;        // 余剰行数
+  int rows_per_process = N / size;  // 基本の行数
+  int extra_rows = N % size;        // 余剰行数
   int start_row = rank * rows_per_process + min(rank, extra_rows);
   int end_row = start_row + rows_per_process + (rank < extra_rows ? 1 : 0);
-
-  int j = 0;
-  int k = 0;
-  int a = 0;
-  for (int i = start_row; i < end_row; i++) {  // 行列Aの行をループ
-    j = (i / N);
-    a = j / N;
-    k = i % N;
-    j = j % N;
-    shared_matC[(N * a) + k] += matA[a][k] * matB[k][j];
+  // 行列計算
+  for (int i = start_row; i < end_row; i++) {
+    for (int k = 0; k < K; k++) {
+      int a = matA[i][k];
+      // #pragma omp simd
+      for (int j = 0; j < N; j++) {
+        shared_matC[(i*N)+j] += a * matB[k][j];
+      }
+    }
   }
-
-  // int range = (N * N) / size;
-  // int ps_start = rank * range;
-  // int ps_end = (rank + 1) * range;
-
-  // // 行列計算
-  // for (int index = ps_start; index < ps_end; index++) {
-  //   int i = index / N;
-  //   int k = index % N;
-  //   for (int j = 0; j < N; j++) {
-  //     shared_matC[i * N + j] += matA[i][k] * matB[k][j];
-  //   }
-  // }
 
   // 計測終了
   MPI_Barrier(MPI_COMM_WORLD);  // 全プロセスを同期
@@ -107,8 +93,8 @@ int main(int argc, char **argv) {
 
   // MPI終了
   // if (rank == 0) {
-  //   for (int i = 0; i < 10; i++) {
-  //     for (int j = 0; j < 10; j++) {
+  //   for (int i = 0; i < N; i++) {
+  //     for (int j = 0; j < N; j++) {
   //       cout << shared_matC[(i * N) + j] << " ";  // ランダム値で初期化
   //     }
   //     cout << endl;
