@@ -10,19 +10,22 @@ using namespace std;
 
 int main(int argc, char **argv) {
   // コマンドライン引数のチェック
-  if (argc < 3) {
-    cerr << "Usage: " << argv[0] << " <matrix_size> <output_filename>" << endl;
+  if (argc < 4) {
+    cerr << "Usage: " << argv[0]
+         << " <matrix_size> <matrix_size> <output_filename>" << endl;
     return 1;
   }
 
   int N = atoi(argv[1]);
-  string s = argv[2];
-  bool flg = true;
+  int K = atoi(argv[2]);
+  string s = argv[3];
+
+  // 行列とベクトルの定義
+  vector<vector<int>> matA(N, vector<int>(K, 0));
+  vector<vector<int>> matB(K, vector<int>(N, 0));
+  vector<vector<int>> matC(N, vector<int>(N, 0));
 
   // 行列の初期化
-  vector<int> matA(N, 0);
-  vector<vector<int>> matB(N, vector<int>(N, 0));
-  vector<int> matC(N, 0);
 
   // ランダム数生成
   int seed = 0;
@@ -30,9 +33,11 @@ int main(int argc, char **argv) {
   uniform_int_distribution<int> dist(0, 100);
 
   for (int i = 0; i < N; i++) {
-    matA[i] = dist(engine);
+    for (int j = 0; j < K; j++) {
+      matA[i][j] = dist(engine);
+    }
   }
-  for (int i = 0; i < N; i++) {
+  for (int i = 0; i < K; i++) {
     for (int j = 0; j < N; j++) {
       matB[i][j] = dist(engine);
     }
@@ -44,39 +49,25 @@ int main(int argc, char **argv) {
   int rows_per_process = N / num_threads;
   int extra_rows = N % num_threads;
   omp_set_num_threads(num_threads);
+
+  vector<int> local_matC(N, 0);  // 各スレッドの部分結果を保存
   auto start = chrono::high_resolution_clock::now();
 
-  if (flg) {
-    vector<int> local_matC(N, 0);  // 各スレッドの部分結果を保存
-
 #pragma omp parallel
-    {
-      int my_thread_id = omp_get_thread_num();
+  {
+    int my_thread_id = omp_get_thread_num();
 
-      int start_row =
-          my_thread_id * rows_per_process + min(my_thread_id, extra_rows);
-      int end_row =
-          start_row + rows_per_process + (my_thread_id < extra_rows ? 1 : 0);
+    int range = (N * N) / num_threads;
+    int ps_start = my_thread_id * range;
+    int ps_end = (my_thread_id + 1) * range;
 
-      for (int row = start_row; row < end_row; row++) {
-        for (int col = 0; col < N; col++) {
-          local_matC[row] += matA[col] * matB[col][row];
-        }
+    // 行列計算
+    for (int index = ps_start; index < ps_end; index++) {
+      int i = index / N;
+      int k = index % N;
+      for (int j = 0; j < N; j++) {
+        matC[i][j] += matA[i][k] * matB[k][j];
       }
-
-#pragma omp critical
-      for (int row = start_row; row < end_row; row++) {
-        matC[row] += local_matC[row];
-      }
-    }
-  } else {
-#pragma omp parallel for
-    for (int j = 0; j < N; j++) {
-      int s = 0;
-      for (int k = 0; k < N; k++) {
-        s += matA[k] * matB[k][j];
-      }
-      matC[j] = s;
     }
   }
 
@@ -100,9 +91,12 @@ int main(int argc, char **argv) {
     return 1;
   }
 
-  for (int j = 0; j < N; j++) {
-    outfile << matC[j] << " ";
+  for (int i = 0; i < K; i++) {
+    for (int j = 0; j < N; j++) {
+      outfile << matB[i][j] << " ";
+    }
   }
+
   outfile << endl;
   outfile.close();
 

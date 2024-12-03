@@ -8,27 +8,34 @@ using namespace std;
 
 int main(int argc, char **argv) {
   // コマンドライン引数のチェック
-  if (argc < 3) {
-    cerr << "Usage: " << argv[0] << " <matrix_size> <output_filename>" << endl;
+  if (argc < 4) {
+    cerr << "Usage: " << argv[0]
+         << " <matrix_size> <matrix_size> <output_filename>" << endl;
     return 1;
   }
 
   int N = atoi(argv[1]);
-  string s = argv[2];
+  int K = atoi(argv[2]);
+  string s = argv[3];
 
-  // 行列の初期化
-  vector<vector<int>> matA(1, vector<int>(N, 0));
-  vector<vector<int>> matB(N, vector<int>(N, 0));
-  vector<vector<int>> matC(1, vector<int>(N, 0));
+  // 行列とベクトルの定義
+  vector<vector<int>> matA(N, vector<int>(K, 0));
+  vector<vector<int>> matB(K, vector<int>(N, 0));
+  vector<vector<int>> matC(N, vector<int>(N, 0));
 
   // ランダム数生成
   int seed = 0;
   mt19937 engine(seed);
   uniform_int_distribution<int> dist(0, 100);
 
+  // 行列Aのランダムな値を設定
   for (int i = 0; i < N; i++) {
-    matA[0][i] = dist(engine);
+    for (int j = 0; j < N; j++) {
+      matA[i][j] = dist(engine);
+    }
   }
+
+  // 行列Bのランダムな値を設定
   for (int i = 0; i < N; i++) {
     for (int j = 0; j < N; j++) {
       matB[i][j] = dist(engine);
@@ -39,13 +46,11 @@ int main(int argc, char **argv) {
   auto start = chrono::high_resolution_clock::now();
 
   // 行列計算
-  for (int i = 0; i < 1; i++) {
+  for (int i = 0; i < N; i++) {
     for (int j = 0; j < N; j++) {
       int v = 0;
-      for (int k = 0; k < N; k++) {
-        // asm("start_label:");
+      for (int k = 0; k < K; k++) {
         v += matA[i][k] * matB[k][j];
-        // asm("end_label:");
       }
       matC[i][j] = v;
     }
@@ -71,11 +76,14 @@ int main(int argc, char **argv) {
     return 1;
   }
 
-  for (int j = 0; j < N; j++) {
-    outfile << matC[0][j] << " ";
+  // 行列Cをファイルに書き込む
+  for (int i = 0; i < N; i++) {
+    for (int j = 0; j < N; j++) {
+      outfile << matC[i][j] << " ";
+    }
+    outfile << endl;
   }
-  outfile << endl;
-  outfile.close();
 
+  outfile.close();
   return 0;
 }
