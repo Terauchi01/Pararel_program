@@ -1,52 +1,102 @@
 #include <mpi.h>
-#include <stdio.h>
-/* execute with 4 processes */
-#define N 4
-int matA[1][4];
-int matB[4][1];
-int matC[1][4];
-int buffer[4][1];
+#include <iostream>
+#include <vector>
+#include <random>
+using namespace std;
+
 int main(int argc, char **argv) {
-  int size, rank;
   MPI_Init(&argc, &argv);
-  MPI_Comm_size(MPI_COMM_WORLD, &size);
+
+  int rank, size;
   MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-  /* initialization: matA = ones(1, 4), matB = ones(4, 1) */
-  {
-    int i, j;
-    for (i = 0; i < 4; i++) {
-      matA[0][i] = 1;
-    }
-    for (i = 0; i < 4; i++) {
-      matB[i][0] = 1;
+  MPI_Comm_size(MPI_COMM_WORLD, &size);
+
+  if (argc < 4) {
+    cerr << "Usage: " << argv[0]
+         << " <N> <K> <output_file>" << endl;
+    MPI_Finalize();
+    return 1;
+  }
+
+  int N = atoi(argv[1]);
+  int K = atoi(argv[2]);
+  string output_file = argv[3];
+
+  // 行列の初期化
+  vector<vector<int>> matA(N, vector<int>(K, 1));       // 全て1に初期化
+  vector<vector<int>> matB(K, vector<int>(N, 1)); // ランク依存で初期化
+  vector<vector<int>> matC(N, vector<int>(N, 0));       // 結果行列
+  int seed = 0;
+  mt19937 engine(seed);
+  uniform_int_distribution<int> dist(0, 100);
+
+  // 初期化: matA = 0からN-1, matB = i * N + j
+  for (int i = 0; i < N; i++) {
+    for (int j = 0; j < K; j++) {
+      matA[i][j] = dist(engine);
     }
   }
-  {
-    int loop, i, j, k;
-    MPI_Request reqs, reqr;
-    for (loop = 0; loop < 4; loop++) {
-      /* computation */
-      for (i = 0; i < 1; i++) {
-        for (j = 0; j < 1; j++) {
-          int v = 0;
-          for (k = 0; k < 4; k++) {
-            v += matA[i][k] * matB[k][j];
-          }
-          matC[i][(rank + loop) % N] = v;
-        }
-      }
-      /* communication */
-      MPI_Isend(matB, 4, MPI_INT, (rank + N - 1) % N, 0, MPI_COMM_WORLD, &reqs);
-      MPI_Irecv(buffer, 4, MPI_INT, (rank + 1) % N, 0, MPI_COMM_WORLD, &reqr);
-      MPI_Wait(&reqs, MPI_STATUS_IGNORE);
-      MPI_Wait(&reqr, MPI_STATUS_IGNORE);
-      for (i = 0; i < 4; i++) {
-        for (j = 0; j < 1; j++) {
-          matB[i][j] = buffer[i][j];
-        }
+  for (int i = 0; i < K; i++) {
+    for (int j = 0; j < N; j++) {
+      matB[i][j] = dist(engine);  // ランダム値で初期化
+    }
+  }
+
+  // 部分行列の計算
+  int rows_per_process = N / size;
+  int extra_rows = N % size;
+  int start_row = rank * rows_per_process + min(rank, extra_rows);
+  int end_row = start_row + rows_per_process + (rank < extra_rows ? 1 : 0);
+
+  vector<vector<int>> local_C(end_row - start_row, vector<int>(N, 0));
+
+  double start_time = MPI_Wtime();
+
+  for (int i = start_row; i < end_row; ++i) {
+    for (int j = 0; j < N; ++j) {
+      for (int k = 0; k < K; ++k) {
+        local_C[i - start_row][j] += matA[i][k] * matB[k][j];
       }
     }
   }
+
+  // 各プロセスの結果をランク0に集める
+  if (rank == 0) {
+    // ランク0の結果を直接 matC にコピー
+    for (int i = 0; i < end_row - start_row; ++i) {
+      matC[start_row + i] = local_C[i];
+    }
+
+    // 他のプロセスから結果を受信
+    for (int p = 1; p < size; ++p) {
+      int recv_start_row = p * rows_per_process + min(p, extra_rows);
+      int recv_end_row =
+          recv_start_row + rows_per_process + (p < extra_rows ? 1 : 0);
+      for (int i = recv_start_row; i < recv_end_row; ++i) {
+        MPI_Recv(matC[i].data(), N, MPI_INT, p, 0, MPI_COMM_WORLD,
+                 MPI_STATUS_IGNORE);
+      }
+    }
+  } else {
+    // ランク0に部分結果を送信
+    for (int i = 0; i < local_C.size(); ++i) {
+      MPI_Send(local_C[i].data(), N, MPI_INT, 0, 0, MPI_COMM_WORLD);
+    }
+  }
+
+  double end_time = MPI_Wtime();
+
+  if (rank == 0) {
+    cout << "Execution time: " << end_time - start_time << " seconds" << endl;
+    cout << "Result matrix:" << endl;
+    // for (int i = 0; i < N; ++i) {
+    //   for (int j = 0; j < N; ++j) {
+    //     cout << matC[i][j] << " ";
+    //   }
+    //   cout << endl;
+    // }
+  }
+
   MPI_Finalize();
   return 0;
 }
