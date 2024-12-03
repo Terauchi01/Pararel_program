@@ -8,11 +8,10 @@
 #include <vector>
 using namespace std;
 
-int main(int argc, char **argv) {
+int main(int argc, char** argv) {
   // コマンドライン引数のチェック
   if (argc < 4) {
-    cerr << "Usage: " << argv[0]
-         << " <matrix_size> <matrix_size> <output_filename>" << endl;
+    cerr << "Usage: " << argv[0] << " <K> <N> <output_filename>" << endl;
     return 1;
   }
 
@@ -20,18 +19,17 @@ int main(int argc, char **argv) {
   int K = atoi(argv[2]);
   string s = argv[3];
 
-  // 行列とベクトルの定義
+  // 行列の定義
   vector<vector<int>> matA(N, vector<int>(K, 0));
   vector<vector<int>> matB(K, vector<int>(N, 0));
   vector<vector<int>> matC(N, vector<int>(N, 0));
-
-  // 行列の初期化
 
   // ランダム数生成
   int seed = 0;
   mt19937 engine(seed);
   uniform_int_distribution<int> dist(0, 100);
 
+  // A, B 行列の初期化
   for (int i = 0; i < N; i++) {
     for (int j = 0; j < K; j++) {
       matA[i][j] = dist(engine);
@@ -44,29 +42,65 @@ int main(int argc, char **argv) {
   }
 
   // 実行時間計測開始
-
   int num_threads = omp_get_max_threads();
-  int rows_per_process = N / num_threads;
-  int extra_rows = N % num_threads;
   omp_set_num_threads(num_threads);
+  int range = (N) / num_threads;
+  int remainder = (N) % num_threads;
 
-  vector<int> local_matC(N, 0);  // 各スレッドの部分結果を保存
   auto start = chrono::high_resolution_clock::now();
+  vector<vector<int>> local_C(N, vector<int>(N, 0));
+  // #pragma omp parallel for private( \
+//         local_C)  // privateでローカル変数local_Cを各スレッドに割り当て
+  //   for (int i = 0; i < N; i++) {
+  //     // ローカル行列の計算
+  //     vector<vector<int>> local_C(
+  //         N, vector<int>(N, 0));  // 各スレッドでローカルの行列Cを確保
+
+  //     for (int k = 0; k < K; k++) {
+  //       for (int j = 0; j < N; j++) {
+  //         local_C[i][j] += matA[i][k] * matB[k][j];  // 行列計算
+  //       }
+  //     }
+
+  // // 各スレッドで計算した結果をmatCに集約
+  // #pragma omp critical
+  //     {
+  //       for (int j = 0; j < N; j++) {
+  //         matC[i][j] += local_C[i][j];  // 結果を加算
+  //       }
+  //     }
+  //   }
 
 #pragma omp parallel
   {
     int my_thread_id = omp_get_thread_num();
 
-    int range = (N * N) / num_threads;
-    int ps_start = my_thread_id * range;
-    int ps_end = (my_thread_id + 1) * range;
+    // 最後のスレッドは余りを含めた範囲を担当
+    int ps_start = my_thread_id * range + std::min(my_thread_id, remainder);
+    int ps_end =
+        (my_thread_id + 1) * range + std::min(my_thread_id + 1, remainder);
+
+    // ローカル行列の計算
+    vector<vector<int>> local_C(N, vector<int>(N, 0));
 
     // 行列計算
-    for (int index = ps_start; index < ps_end; index++) {
-      int i = index / N;
-      int k = index % N;
-      for (int j = 0; j < N; j++) {
-        matC[i][j] += matA[i][k] * matB[k][j];
+    for (int i = ps_start; i < ps_end; i++) {
+      for (int k = 0; k < K; k++) {
+        int a = matA[i][k];
+        #pragma omp simd
+        for (int j = 0; j < N; j++) {
+          local_C[i][j] += a * matB[k][j];
+        }
+      }
+    }
+
+    // 各スレッドで計算した結果を matC に集約する
+#pragma omp critical
+    {
+      for (int i = 0; i < N; i++) {
+        for (int j = 0; j < N; j++) {
+          matC[i][j] += local_C[i][j];
+        }
       }
     }
   }
@@ -91,13 +125,18 @@ int main(int argc, char **argv) {
     return 1;
   }
 
-  for (int i = 0; i < K; i++) {
+  // 行列Cの出力
+  for (int i = 0; i < N; i++) {
     for (int j = 0; j < N; j++) {
-      outfile << matB[i][j] << " ";
+      outfile << matC[i][j];
+      if (j != N - 1) {
+        outfile << " ";
+      } else if (i != N - 1) {
+        outfile << endl;
+      }
     }
   }
 
-  outfile << endl;
   outfile.close();
 
   return 0;

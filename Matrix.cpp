@@ -30,13 +30,13 @@ int main(int argc, char **argv) {
 
   // 行列Aのランダムな値を設定
   for (int i = 0; i < N; i++) {
-    for (int j = 0; j < N; j++) {
+    for (int j = 0; j < K; j++) {
       matA[i][j] = dist(engine);
     }
   }
 
   // 行列Bのランダムな値を設定
-  for (int i = 0; i < N; i++) {
+  for (int i = 0; i < K; i++) {
     for (int j = 0; j < N; j++) {
       matB[i][j] = dist(engine);
     }
@@ -76,12 +76,15 @@ int main(int argc, char **argv) {
     return 1;
   }
 
-  // 行列Cをファイルに書き込む
   for (int i = 0; i < N; i++) {
     for (int j = 0; j < N; j++) {
-      outfile << matC[i][j] << " ";
+      outfile << matC[i][j];
+      if (j != N - 1) {
+        outfile << " ";
+      } else if (i != N - 1) {
+        outfile << endl;
+      }
     }
-    outfile << endl;
   }
 
   outfile.close();
