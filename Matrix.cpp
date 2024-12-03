@@ -43,7 +43,9 @@ int main(int argc, char **argv) {
     for (int j = 0; j < N; j++) {
       int v = 0;
       for (int k = 0; k < N; k++) {
+        // asm("start_label:");
         v += matA[i][k] * matB[k][j];
+        // asm("end_label:");
       }
       matC[i][j] = v;
     }

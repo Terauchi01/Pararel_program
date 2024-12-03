@@ -39,18 +39,35 @@ int main(int argc, char **argv) {
   }
 
   // 実行時間計測開始
+
   int num_threads = omp_get_max_threads();
+  int rows_per_process = N / num_threads;
+  int extra_rows = N % num_threads;
   omp_set_num_threads(num_threads);
   auto start = chrono::high_resolution_clock::now();
 
   if (flg) {
-    int s = 0, d = 0;
-#pragma omp parallel for private(d, s)
-    for (int j = 0; j < N * N; j++) {
-      int row = j / N;  // 行番号（jをNで割った商）
-      int col = j % N;  // 列番号（jをNで割った余り）
+    vector<int> local_matC(N, 0);  // 各スレッドの部分結果を保存
 
-      matC[row] += matA[col] * matB[col][row];
+#pragma omp parallel
+    {
+      int my_thread_id = omp_get_thread_num();
+
+      int start_row =
+          my_thread_id * rows_per_process + min(my_thread_id, extra_rows);
+      int end_row =
+          start_row + rows_per_process + (my_thread_id < extra_rows ? 1 : 0);
+
+      for (int row = start_row; row < end_row; row++) {
+        for (int col = 0; col < N; col++) {
+          local_matC[row] += matA[col] * matB[col][row];
+        }
+      }
+
+#pragma omp critical
+      for (int row = start_row; row < end_row; row++) {
+        matC[row] += local_matC[row];
+      }
     }
   } else {
 #pragma omp parallel for
